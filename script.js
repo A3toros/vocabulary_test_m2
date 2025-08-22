@@ -527,14 +527,53 @@ document.addEventListener('DOMContentLoaded', function() {
         .retry-button:hover {
           background-color: #0056b3;
         }
+        .form-loading {
+          opacity: 0.6;
+          pointer-events: none;
+        }
+        .form-loading input,
+        .form-loading button {
+          cursor: not-allowed;
+        }
+        .loading-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(255, 255, 255, 0.8);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 10;
+        }
+        .loading-spinner {
+          border: 3px solid #f3f3f3;
+          border-top: 3px solid #007bff;
+          border-radius: 50%;
+          width: 30px;
+          height: 30px;
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
       `;
       document.head.appendChild(style);
     }
     
-    // Show loading state
-    const registrationStatus = document.getElementById('registration-status');
-    if (registrationStatus) {
-      showStatus(registrationStatus, "Loading quiz...", "info");
+    // Always lock the registration form while loading
+    const hasExistingData = localStorage.getItem('vocabularyTestFormData') || 
+                           localStorage.getItem('registrationId') || 
+                           localStorage.getItem('userNickname');
+    
+    if (hasExistingData) {
+      // Lock the registration form while loading
+      lockRegistrationForm("Restoring your previous session...");
+    } else {
+      // Lock the registration form while loading for fresh visitors
+      lockRegistrationForm("Loading quiz...");
     }
     
     try {
@@ -581,6 +620,12 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Restore saved data and position on page load
     restoreSavedData();
+    
+    // Unlock the form after loading is complete
+    // Small delay to make the loading state visible
+    setTimeout(() => {
+      unlockRegistrationForm();
+    }, 500);
   }
   
   // Save form data to localStorage
@@ -634,6 +679,12 @@ document.addEventListener('DOMContentLoaded', function() {
         return;
       }
       
+      // Show loading message in registration status if we're restoring data
+      const registrationStatus = document.getElementById('registration-status');
+      if (registrationStatus && formData.currentSection !== 'registration') {
+        showStatus(registrationStatus, "Restoring your previous session...", "info");
+      }
+      
       // Restore registration data
       if (formData.nickname) {
         const nicknameField = document.getElementById('nickname');
@@ -662,6 +713,12 @@ document.addEventListener('DOMContentLoaded', function() {
         questionnaireSection.style.display = 'block';
         questionnaireSection.style.opacity = '1';
         questionnaireSection.style.transform = 'translateY(0)';
+        
+        // Clear the loading message since we're now on questionnaire
+        if (registrationStatus) {
+          registrationStatus.textContent = '';
+          registrationStatus.className = 'status';
+        }
       } else if (formData.currentSection === 'results') {
         // User was on results, but we can't restore the actual results
         // Redirect them back to questionnaire if they have data, otherwise to registration
@@ -670,6 +727,12 @@ document.addEventListener('DOMContentLoaded', function() {
           questionnaireSection.style.display = 'block';
           questionnaireSection.style.opacity = '1';
           questionnaireSection.style.transform = 'translateY(0)';
+          
+          // Clear the loading message since we're now on questionnaire
+          if (registrationStatus) {
+            registrationStatus.textContent = '';
+            registrationStatus.className = 'status';
+          }
         } else {
           // No registration data, go back to registration
           registrationSection.style.display = 'block';
@@ -727,6 +790,60 @@ document.addEventListener('DOMContentLoaded', function() {
       // This is a reload within the same session - keep all data
       // Update visit timestamp to extend the session
       localStorage.setItem('lastVisitTime', currentTime.toString());
+    }
+  }
+  
+  // Lock registration form with loading overlay
+  function lockRegistrationForm(message) {
+    const registrationSection = document.getElementById('registration-section');
+    const registrationForm = document.getElementById('registration-form');
+    
+    if (registrationSection && registrationForm) {
+      // Add loading class to form
+      registrationForm.classList.add('form-loading');
+      
+      // Create loading overlay
+      const overlay = document.createElement('div');
+      overlay.className = 'loading-overlay';
+      overlay.innerHTML = `
+        <div style="text-align: center;">
+          <div class="loading-spinner"></div>
+          <div style="margin-top: 15px; color: #666; font-size: 14px;">${message}</div>
+        </div>
+      `;
+      
+      // Position the overlay relative to the registration section
+      registrationSection.style.position = 'relative';
+      registrationSection.appendChild(overlay);
+      
+      // Disable all form inputs
+      const inputs = registrationForm.querySelectorAll('input, button');
+      inputs.forEach(input => {
+        input.disabled = true;
+      });
+    }
+  }
+  
+  // Unlock registration form
+  function unlockRegistrationForm() {
+    const registrationSection = document.getElementById('registration-section');
+    const registrationForm = document.getElementById('registration-form');
+    
+    if (registrationSection && registrationForm) {
+      // Remove loading class
+      registrationForm.classList.remove('form-loading');
+      
+      // Remove loading overlay
+      const overlay = registrationSection.querySelector('.loading-overlay');
+      if (overlay) {
+        overlay.remove();
+      }
+      
+      // Re-enable all form inputs
+      const inputs = registrationForm.querySelectorAll('input, button');
+      inputs.forEach(input => {
+        input.disabled = false;
+      });
     }
   }
   
