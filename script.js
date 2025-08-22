@@ -10,20 +10,8 @@ document.addEventListener('DOMContentLoaded', function() {
   // Track submission state
   let isSubmitting = false;
   
-  // Correct answers for each question (multiple possible answers per question)
-  // You can fill these in with your own correct answers
-  const correctAnswers = {
-    'question1': ['server'], // Add correct answers for question 1
-    'question2': ['souvenir'], // Add correct answers for question 2
-    'question3': ['bracelet'], // Add correct answers for question 3
-    'question4': ['immigrants', 'immigrant'], // Add correct answers for question 4
-    'question5': ['polite'], // Add correct answers for question 5
-    'question6': ['starving'], // Add correct answers for question 6
-    'question7': ['wrapped'], // Add correct answers for question 7
-    'question8': ['local'], // Add correct answers for question 8
-    'question9': ['popular'], // Add correct answers for question 9
-    'question10': ['fries', 'french fries'] // Add correct answers for question 10
-  };
+  // Correct answers will be fetched from database
+  let correctAnswers = {};
   
   // Utility functions
   function showStatus(element, message, type) {
@@ -66,6 +54,42 @@ document.addEventListener('DOMContentLoaded', function() {
       return result;
     } catch (error) {
       // Re-throw network or parsing errors
+      throw error;
+    }
+  }
+  
+  // Fetch correct answers from database
+  async function fetchCorrectAnswers() {
+    try {
+      const response = await fetch('/.netlify/functions/get-correct-answers', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch correct answers: ${response.status}`);
+      }
+      
+      const result = await response.json();
+      
+      // Transform the database results into the expected format
+      // Database returns: [{id: 1, question_id: 1, correct_answer: "server"}, ...]
+      // We need: {question1: ["server"], question2: ["souvenir"], ...}
+      const transformedAnswers = {};
+      
+      result.forEach(item => {
+        const questionKey = `question${item.question_id}`;
+        if (!transformedAnswers[questionKey]) {
+          transformedAnswers[questionKey] = [];
+        }
+        transformedAnswers[questionKey].push(item.correct_answer);
+      });
+      
+      return transformedAnswers;
+    } catch (error) {
+      console.error('Error fetching correct answers:', error);
       throw error;
     }
   }
@@ -269,17 +293,23 @@ document.addEventListener('DOMContentLoaded', function() {
       }
     }
     
-    questionnaireForm.addEventListener('submit', async function(event) {
-      event.preventDefault();
-      
-      // Prevent double submission
-      if (isSubmitting) return;
-      
-      // Check if all questions are answered
-      const answers = {};
-      const answersList = [];
-      let allAnswered = true;
-      let firstEmptyField = null;
+         questionnaireForm.addEventListener('submit', async function(event) {
+       event.preventDefault();
+       
+       // Prevent double submission
+       if (isSubmitting) return;
+       
+       // Check if correct answers are loaded
+       if (Object.keys(correctAnswers).length === 0) {
+         showStatus(questionnaireStatus, "Quiz data not loaded. Please refresh the page.", "error");
+         return;
+       }
+       
+       // Check if all questions are answered
+       const answers = {};
+       const answersList = [];
+       let allAnswered = true;
+       let firstEmptyField = null;
       
       // Validate each question field
       for (let i = 1; i <= 10; i++) {
@@ -396,7 +426,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
   
   // Initialize page
-  function init() {
+  async function init() {
     // Add dynamic styles
     if (!document.getElementById('dynamic-styles')) {
       const style = document.createElement('style');
@@ -465,8 +495,62 @@ document.addEventListener('DOMContentLoaded', function() {
           color: #721c24;
           border-color: #dc3545;
         }
+        .loading {
+          text-align: center;
+          padding: 20px;
+          color: #666;
+        }
+        .retry-button {
+          background-color: #007bff;
+          color: white;
+          border: none;
+          padding: 8px 16px;
+          border-radius: 4px;
+          cursor: pointer;
+          margin-left: 10px;
+          font-size: 14px;
+        }
+        .retry-button:hover {
+          background-color: #0056b3;
+        }
       `;
       document.head.appendChild(style);
+    }
+    
+    // Show loading state
+    const registrationStatus = document.getElementById('registration-status');
+    if (registrationStatus) {
+      showStatus(registrationStatus, "Loading quiz...", "info");
+    }
+    
+    try {
+      // Fetch correct answers from database
+      console.log('Fetching correct answers from database...');
+      correctAnswers = await fetchCorrectAnswers();
+      console.log('Correct answers loaded:', correctAnswers);
+      
+      // Clear loading message
+      if (registrationStatus) {
+        registrationStatus.textContent = '';
+        registrationStatus.className = 'status';
+      }
+    } catch (error) {
+      console.error('Failed to load correct answers:', error);
+      // Show error message to user with retry option
+      if (registrationStatus) {
+        showStatus(registrationStatus, "Failed to load quiz data. Please refresh the page.", "error");
+        
+        // Add retry button
+        const retryButton = document.createElement('button');
+        retryButton.textContent = 'Retry';
+        retryButton.className = 'retry-button';
+        retryButton.onclick = () => {
+          showStatus(registrationStatus, "Retrying...", "info");
+          setTimeout(() => init(), 1000);
+        };
+        registrationStatus.appendChild(retryButton);
+      }
+      return; // Don't proceed if we can't load correct answers
     }
     
     // Check if this is a fresh visit or a reload with existing data
