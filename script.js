@@ -469,6 +469,9 @@ document.addEventListener('DOMContentLoaded', function() {
       document.head.appendChild(style);
     }
     
+    // Check if this is a fresh visit or a reload with existing data
+    checkAndClearStorage();
+    
     // Restore saved data and position on page load
     restoreSavedData();
   }
@@ -562,9 +565,43 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
   
+  // Check if this is a fresh visit or a reload with existing data
+  function checkAndClearStorage() {
+    // Check if there's any existing data
+    const hasExistingData = localStorage.getItem('vocabularyTestFormData') || 
+                           localStorage.getItem('registrationId') || 
+                           localStorage.getItem('userNickname');
+    
+    // Check if this is a fresh visit (no sessionStorage flag)
+    const isFreshVisit = !sessionStorage.getItem('hasVisited');
+    
+    if (isFreshVisit && !hasExistingData) {
+      // This is a completely fresh visit - clear everything
+      localStorage.removeItem('vocabularyTestFormData');
+      localStorage.removeItem('registrationId');
+      localStorage.removeItem('userNickname');
+      
+      // Set session flag to indicate this session has been initialized
+      sessionStorage.setItem('hasVisited', 'true');
+    } else if (isFreshVisit && hasExistingData) {
+      // This is a fresh visit but there's existing data from a previous session
+      // Keep the data (user might have been working on it and reloaded)
+      // Just set the session flag
+      sessionStorage.setItem('hasVisited', 'true');
+    } else {
+      // This is a reload within the same session - keep all data
+      // The session flag is already set
+    }
+  }
+  
   // Clear saved form data
   function clearSavedData() {
     localStorage.removeItem('vocabularyTestFormData');
+    localStorage.removeItem('registrationId');
+    localStorage.removeItem('userNickname');
+    
+    // Also clear sessionStorage so next visit will be treated as fresh
+    sessionStorage.removeItem('hasVisited');
   }
   
   // Run initialization
@@ -579,6 +616,15 @@ document.addEventListener('DOMContentLoaded', function() {
   document.addEventListener('visibilitychange', function() {
     if (document.visibilityState === 'hidden') {
       saveFormData();
+    }
+  });
+  
+  // Clear sessionStorage when page is unloaded if test is complete
+  window.addEventListener('unload', function() {
+    // If we're on the results page, clear sessionStorage for next visit
+    const resultsSection = document.getElementById('results-section');
+    if (resultsSection && resultsSection.style.display !== 'none') {
+      sessionStorage.removeItem('hasVisited');
     }
   });
 });
