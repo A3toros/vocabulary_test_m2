@@ -515,6 +515,18 @@ document.addEventListener('DOMContentLoaded', function() {
     try {
       const formData = JSON.parse(savedData);
       
+      // Safety check: ensure we have registration data before proceeding
+      const hasRegistrationData = localStorage.getItem('registrationId') && localStorage.getItem('userNickname');
+      if (!hasRegistrationData && formData.currentSection === 'questionnaire') {
+        // We're trying to restore questionnaire state but have no registration data
+        // This is a corrupted state - clear everything and start fresh
+        console.log('Safety check: No registration data found for questionnaire state. Clearing localStorage.');
+        localStorage.removeItem('vocabularyTestFormData');
+        localStorage.removeItem('registrationId');
+        localStorage.removeItem('userNickname');
+        return;
+      }
+      
       // Restore registration data
       if (formData.nickname) {
         const nicknameField = document.getElementById('nickname');
@@ -537,8 +549,8 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       
       // Restore position based on saved section
-      if (formData.currentSection === 'questionnaire' && formData.nickname && formData.number) {
-        // User was on questionnaire, show it
+      if (formData.currentSection === 'questionnaire' && formData.nickname && formData.number && hasRegistrationData) {
+        // User was on questionnaire, show it (only if we have all required data)
         registrationSection.style.display = 'none';
         questionnaireSection.style.display = 'block';
         questionnaireSection.style.opacity = '1';
@@ -546,7 +558,7 @@ document.addEventListener('DOMContentLoaded', function() {
       } else if (formData.currentSection === 'results') {
         // User was on results, but we can't restore the actual results
         // Redirect them back to questionnaire if they have data, otherwise to registration
-        if (formData.nickname && formData.number) {
+        if (formData.nickname && formData.number && hasRegistrationData) {
           registrationSection.style.display = 'none';
           questionnaireSection.style.display = 'block';
           questionnaireSection.style.opacity = '1';
@@ -585,8 +597,21 @@ document.addEventListener('DOMContentLoaded', function() {
       sessionStorage.setItem('hasVisited', 'true');
     } else if (isFreshVisit && hasExistingData) {
       // This is a fresh visit but there's existing data from a previous session
-      // Keep the data (user might have been working on it and reloaded)
-      // Just set the session flag
+      // Check if we have a corrupted state (questionnaire data without registration data)
+      const hasQuestionnaireData = localStorage.getItem('vocabularyTestFormData');
+      const hasRegistrationData = localStorage.getItem('registrationId') && localStorage.getItem('userNickname');
+      
+      if (hasQuestionnaireData && !hasRegistrationData) {
+        // This is the problematic case: questionnaire data exists but no registration data
+        // Clear everything and start fresh
+        console.log('Detected corrupted state: questionnaire data without registration data. Clearing localStorage.');
+        localStorage.removeItem('vocabularyTestFormData');
+        localStorage.removeItem('registrationId');
+        localStorage.removeItem('userNickname');
+      }
+      // Otherwise keep the data (user might have been working on it and reloaded)
+      
+      // Set session flag to indicate this session has been initialized
       sessionStorage.setItem('hasVisited', 'true');
     } else {
       // This is a reload within the same session - keep all data
