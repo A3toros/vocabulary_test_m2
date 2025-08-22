@@ -584,8 +584,11 @@ document.addEventListener('DOMContentLoaded', function() {
                            localStorage.getItem('registrationId') || 
                            localStorage.getItem('userNickname');
     
-    // Check if this is a fresh visit (no sessionStorage flag)
-    const isFreshVisit = !sessionStorage.getItem('hasVisited');
+    // Use a more reliable method to detect fresh visits
+    // Check if we have a timestamp from last visit
+    const lastVisitTime = localStorage.getItem('lastVisitTime');
+    const currentTime = Date.now();
+    const isFreshVisit = !lastVisitTime || (currentTime - parseInt(lastVisitTime)) > 300000; // 5 minutes
     
     if (isFreshVisit && !hasExistingData) {
       // This is a completely fresh visit - clear everything
@@ -593,8 +596,8 @@ document.addEventListener('DOMContentLoaded', function() {
       localStorage.removeItem('registrationId');
       localStorage.removeItem('userNickname');
       
-      // Set session flag to indicate this session has been initialized
-      sessionStorage.setItem('hasVisited', 'true');
+      // Set visit timestamp
+      localStorage.setItem('lastVisitTime', currentTime.toString());
     } else if (isFreshVisit && hasExistingData) {
       // This is a fresh visit but there's existing data from a previous session
       // Check if we have a corrupted state (questionnaire data without registration data)
@@ -611,11 +614,12 @@ document.addEventListener('DOMContentLoaded', function() {
       }
       // Otherwise keep the data (user might have been working on it and reloaded)
       
-      // Set session flag to indicate this session has been initialized
-      sessionStorage.setItem('hasVisited', 'true');
+      // Update visit timestamp
+      localStorage.setItem('lastVisitTime', currentTime.toString());
     } else {
       // This is a reload within the same session - keep all data
-      // The session flag is already set
+      // Update visit timestamp to extend the session
+      localStorage.setItem('lastVisitTime', currentTime.toString());
     }
   }
   
@@ -624,6 +628,7 @@ document.addEventListener('DOMContentLoaded', function() {
     localStorage.removeItem('vocabularyTestFormData');
     localStorage.removeItem('registrationId');
     localStorage.removeItem('userNickname');
+    localStorage.removeItem('lastVisitTime');
     
     // Also clear sessionStorage so next visit will be treated as fresh
     sessionStorage.removeItem('hasVisited');
@@ -644,12 +649,12 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   });
   
-  // Clear sessionStorage when page is unloaded if test is complete
+  // Clear timestamp when page is unloaded if test is complete
   window.addEventListener('unload', function() {
-    // If we're on the results page, clear sessionStorage for next visit
+    // If we're on the results page, clear timestamp for next visit
     const resultsSection = document.getElementById('results-section');
     if (resultsSection && resultsSection.style.display !== 'none') {
-      sessionStorage.removeItem('hasVisited');
+      localStorage.removeItem('lastVisitTime');
     }
   });
 });
